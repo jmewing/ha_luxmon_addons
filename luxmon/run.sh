@@ -20,5 +20,24 @@ rm -rf "${DEST}"
 cp -r "${STAGE}/custom_components/luxmon" "${DEST}"
 rm -rf "${STAGE}" "${ZIP}"
 
+# Persist optional connection defaults so the config flow can pre-fill them.
+# The integration reads this file (if present) to seed host/port/token defaults.
+HOST=$(bashio::config 'luxmon_host')
+PORT=$(bashio::config 'luxmon_port')
+TOKEN=$(bashio::config 'luxmon_api_token')
+
+if [[ -n "${HOST}" || -n "${TOKEN}" ]]; then
+    bashio::log.info "Writing lux-mon connection defaults to config directory..."
+    cat > /homeassistant/custom_components/luxmon/.addon-defaults.json <<EOF
+{
+  "host": "${HOST}",
+  "port": ${PORT},
+  "api_token": "${TOKEN}"
+}
+EOF
+else
+    bashio::log.info "No connection defaults set; configure host/port in the Home Assistant config flow."
+fi
+
 bashio::log.info "Done. Restarting Home Assistant Core..."
 bashio::core.restart

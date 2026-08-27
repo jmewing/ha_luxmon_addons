@@ -16,3 +16,14 @@ init: false
 # bashio::core.restart (POST /core/restart) after installing the integration.
 hassio_api: true
 hassio_role: homeassistant
+# Optional lux-mon connection defaults. These are written to the integration's
+# config directory so the config flow can pre-fill them. Leave blank to enter
+# them manually in the Home Assistant config flow instead.
+options:
+  luxmon_host: ""
+  luxmon_port: 80
+  luxmon_api_token: ""
+schema:
+  luxmon_host: str
+  luxmon_port: int
+  luxmon_api_token: password
