@@ -1,5 +1,5 @@
 name: lux-mon
-version: "0.1.0"
+version: "0.1.1"
 slug: luxmon
 description: Installs the lux-mon Home Assistant integration. Home Assistant Core will be restarted after installation.
 url: https://github.com/jmewing/ha_luxmon
