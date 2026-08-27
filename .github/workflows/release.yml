@@ -1,0 +1,93 @@
+name: Auto Release
+
+# Keep the add-on version in lockstep with the ha_luxmon integration.
+#
+# The add-on version is COUPLED to the integration version: the add-on's
+# run.sh downloads the integration release tagged with its own version. So
+# whenever the integration cuts a new release, this workflow bumps the add-on
+# version to match, commits, tags, and creates a GitHub release.
+#
+# This workflow is triggered on push to main AND on a repository_dispatch
+# event (fired by the ha_luxmon release workflow) so the add-on tracks the
+# integration automatically.
+
+on:
+  push:
+    branches:
+      - main
+  repository_dispatch:
+    types: [integration-released]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    # Skip if the push was made by this workflow itself (avoids a loop).
+    if: ${{ !contains(github.event.head_commit.message, '[skip release]') }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Determine target version
+        id: version
+        run: |
+          # bump-version.sh exits 1 when already in sync (nothing to do).
+          if NEXT="$(bash scripts/bump-version.sh)"; then
+            echo "next=${NEXT}" >> "$GITHUB_OUTPUT"
+            echo "Target version: ${NEXT}"
+          else
+            echo "next=" >> "$GITHUB_OUTPUT"
+            echo "Already in sync; nothing to release."
+          fi
+
+      - name: Check if tag already exists
+        id: tagcheck
+        if: steps.version.outputs.next != ''
+        run: |
+          if git rev-parse "v${{ steps.version.outputs.next }}" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag v${{ steps.version.outputs.next }} already exists; skipping."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Bump version in source
+        if: steps.version.outputs.next != '' && steps.tagcheck.outputs.exists == 'false'
+        run: |
+          bash scripts/bump-version.sh --write
+
+      - name: Commit version bump
+        if: steps.version.outputs.next != '' && steps.tagcheck.outputs.exists == 'false'
+        run: |
+          git add luxmon/config.yaml
+          git commit -m "chore: bump version to ${{ steps.version.outputs.next }} [skip release]" || echo "No changes to commit"
+
+      - name: Push version bump
+        if: steps.version.outputs.next != '' && steps.tagcheck.outputs.exists == 'false'
+        run: git push origin main
+
+      - name: Create tag
+        if: steps.version.outputs.next != '' && steps.tagcheck.outputs.exists == 'false'
+        run: |
+          git tag "v${{ steps.version.outputs.next }}"
+          git push origin "v${{ steps.version.outputs.next }}"
+
+      - name: Create GitHub release
+        if: steps.version.outputs.next != '' && steps.tagcheck.outputs.exists == 'false'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: "v${{ steps.version.outputs.next }}"
+          name: "v${{ steps.version.outputs.next }}"
+          body: |
+            Add-on release tracking the ha_luxmon integration v${{ steps.version.outputs.next }}.
+          generate_release_notes: false
